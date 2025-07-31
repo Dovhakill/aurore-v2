@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="{{ article.chapo }}">
+    <meta name="keywords" content="{{ article.mots_cles_seo | join(', ') }}">
+    <title>{{ article.titre }} - L'Horizon Libre</title>
+    <link rel="stylesheet" href="/css/style.css"> </head>
+<body>
+    <header>
+        <img src="/img/logo-horizon-libre.png" alt="Logo L'Horizon Libre" style="max-width: 200px;">
+        <h1>{{ article.titre }}</h1>
+    </header>
+
+    <main>
+        <article>
+            <p class="chapo"><strong>{{ article.chapo }}</strong></p>
+
+            <img src="https://via.placeholder.com/800x400.png?text={{ article.suggestion_image | urlencode }}" alt="{{ article.suggestion_image }}">
+
+            {% for paragraphe in article.corps_article %}
+            <p>{{ paragraphe }}</p>
+            {% endfor %}
+
+            <p class="conclusion">{{ article.conclusion }}</p>
+        </article>
+    </main>
+
+    <footer>
+        <div class="sources">
+            <h3>Sources</h3>
+            <p>Cet article est une synthèse des informations rapportées par : 
+                {{ article.sources_citees | join(', ') }}.
+            </p>
+        </div>
+        <p>&copy; 2025 L'Horizon Libre. Tous droits réservés.</p>
+    </footer>
+</body>
+</html>

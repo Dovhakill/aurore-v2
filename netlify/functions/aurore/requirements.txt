@@ -1,0 +1,8 @@
+requests
+beautifulsoup4
+PyGithub
+Jinja2
+tweepy
+google-generativeai
+python-slugify
+netlify-blob
