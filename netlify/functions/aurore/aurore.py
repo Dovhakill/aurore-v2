@@ -87,7 +87,7 @@ def create_pull_request(token, repo_name, article_title, html_content):
         repo = g.get_repo(repo_name)
         slug_title = slugify(article_title)
         branch_name = f"aurore/article-{slug_title[:40]}-{datetime.now().strftime('%Y%m%d%H%M')}"
-        source_branch = repo.get_branch(repo.default_branch)
+        source_branch = repo.get_branch('main')
         repo.create_git_ref(ref=f"refs/heads/{branch_name}", sha=source_branch.commit.sha)
         file_path = f"articles/{slug_title}.html"
         commit_message = f"feat: Ajout de l'article '{article_title}'"
