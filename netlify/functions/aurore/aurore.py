@@ -63,7 +63,7 @@ def get_top_articles(topic, api_key, article_count=3):
 
 def create_synthesis(articles, api_key):
     genai.configure(api_key=api_key)
-    model = genai.GenerativeModel('gemini-pro')
+    model = genai.GenerativeModel('gemini-1.5-flash-latest')
     prompt_header = """# RÔLE\nTu es 'Aurore', un assistant journaliste pour 'L'Horizon Libre'. Ta mission est de créer une synthèse neutre et factuelle en te basant **uniquement** sur les sources fournies.\n\n# FORMAT DE SORTIE\nRéponds **uniquement** en JSON valide.\n\n{\n  "titre": "...",\n  "chapo": "...",\n  "corps_article": ["...", "..."],\n  "conclusion": "...",\n  "suggestion_image": "...",\n  "mots_cles_seo": ["...", "..."],\n  "sources_citees": ["...", "..."],\n  "suggestion_tweet": "..."\n}\n\n# ARTICLES SOURCES\n---\n"""
     article_content_str = ""
     for i, article in enumerate(articles):
