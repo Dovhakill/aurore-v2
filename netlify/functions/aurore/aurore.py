@@ -161,3 +161,6 @@ def handler(event, context):
     except Exception as e:
         print(f"--- ERREUR FATALE DANS LE WORKFLOW D'AURORE --- \n{e}")
         return {'statusCode': 500, 'body': json.dumps({'error': str(e)})}
+if __name__ == "__main__":
+    # On appelle la fonction principale pour lancer le processus
+    handler(event=None, context=None)
