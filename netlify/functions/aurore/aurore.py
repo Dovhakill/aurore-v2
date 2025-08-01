@@ -120,7 +120,7 @@ def handler(event, context):
     GITHUB_TOKEN = os.environ.get('AURORE_GITHUB_TOKEN')
     GITHUB_REPO = os.environ.get('GITHUB_REPO_NAME')
     KVDB_BUCKET_URL = os.environ.get('KVDB_BUCKET_URL')
-    topic = "tendances technologie 2025"
+    topic = "france"
 
     try:
         processed_urls = get_processed_urls(KVDB_BUCKET_URL)
