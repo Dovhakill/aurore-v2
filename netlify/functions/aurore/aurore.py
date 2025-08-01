@@ -12,48 +12,42 @@ from slugify import slugify
 import tweepy
 
 # ==============================================================================
-# MODULE : DEDUPLICATOR (Nouvelle version avec Gist)
+# MODULE : DEDUPLICATOR (Nouvelle version avec kvdb.io)
 # ==============================================================================
-def get_processed_urls(gist_id, token):
-    """Lit les URLs depuis le Gist GitHub."""
-    headers = {'Authorization': f'token {token}'}
+def get_processed_urls(bucket_url):
+    """Lit les URLs depuis le bucket kvdb.io."""
     try:
-        res = requests.get(f'https://api.github.com/gists/{gist_id}', headers=headers)
+        res = requests.get(bucket_url)
         res.raise_for_status()
-        data = res.json()
-        content = data['files']['processed_urls.txt']['content']
-        return set(content.splitlines())
+        # kvdb renvoie une liste de clés, on les veut dans un set
+        return set(res.json())
+    except requests.exceptions.JSONDecodeError: # Le bucket est peut-être vide
+        return set()
     except Exception as e:
-        print(f"Erreur en lisant le Gist : {e}")
+        print(f"Erreur en lisant le bucket kvdb : {e}")
         return None
 
 def check_and_filter_articles(articles, processed_urls):
     """Filtre les articles qui n'ont pas encore été traités."""
-    if processed_urls is None: return [] # En cas d'erreur de lecture, on ne traite rien
+    if processed_urls is None: return []
     
     new_articles = []
     for article in articles:
-        if article.get('url') not in processed_urls:
+        # On utilise un hash de l'URL comme clé pour kvdb
+        key = hashlib.sha256(article.get('url').encode()).hexdigest()
+        if key not in processed_urls:
             new_articles.append(article)
     return new_articles
 
-def mark_articles_as_processed(articles, processed_urls, gist_id, token):
-    """Met à jour le Gist avec les nouvelles URLs."""
-    if processed_urls is None: return # Ne rien faire si la lecture a échoué
-    
+def mark_articles_as_processed(articles, bucket_url):
+    """Met à jour le bucket kvdb.io avec les nouvelles clés."""
     for article in articles:
-        processed_urls.add(article.get('url'))
-    
-    new_content = "\n".join(sorted(list(processed_urls)))
-    headers = {'Authorization': f'token {token}'}
-    payload = {'files': {'processed_urls.txt': {'content': new_content}}}
-    
-    try:
-        res = requests.patch(f'https://api.github.com/gists/{gist_id}', headers=headers, json=payload)
-        res.raise_for_status()
-        print(f"Gist mis à jour avec {len(articles)} nouvelle(s) URL(s).")
-    except Exception as e:
-        print(f"Erreur en mettant à jour le Gist : {e}")
+        key = hashlib.sha256(article.get('url').encode()).hexdigest()
+        try:
+            # On envoie une requête POST pour chaque nouvelle clé
+            requests.post(bucket_url + "/" + key)
+        except Exception as e:
+            print(f"Erreur en écrivant dans le bucket kvdb : {e}")
 
 # ==============================================================================
 # MODULES : NEWS, AI, GITHUB, SOCIAL (inchangés)
@@ -118,19 +112,18 @@ def post_to_twitter(tweet_text, article_url):
 # FONCTION PRINCIPALE (HANDLER) - MISE À JOUR
 # ==============================================================================
 def handler(event, context):
-    print("--- Aurore démarre sa mission (version Gist) ---")
+    print("--- Aurore démarre sa mission (version kvdb.io) ---")
     
     # Récupération des secrets
     NEWS_API_KEY = os.environ.get('NEWS_API_KEY')
     GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
-    GITHUB_TOKEN = os.environ.get('AURORE_GITHUB_TOKEN') # Utilise le token personnalisé
+    GITHUB_TOKEN = os.environ.get('AURORE_GITHUB_TOKEN')
     GITHUB_REPO = os.environ.get('GITHUB_REPO_NAME')
-    GIST_ID = os.environ.get('GIST_ID')
+    KVDB_BUCKET_URL = os.environ.get('KVDB_BUCKET_URL')
     topic = "tendances technologie 2025"
 
     try:
-        # Étape de déduplication au début
-        processed_urls = get_processed_urls(GIST_ID, GITHUB_TOKEN)
+        processed_urls = get_processed_urls(KVDB_BUCKET_URL)
         
         all_articles = get_top_articles(topic, NEWS_API_KEY)
         if not all_articles: return {'statusCode': 200, 'body': 'Aucun article source trouvé.'}
@@ -149,8 +142,7 @@ def handler(event, context):
 
         tweet_url = post_to_twitter(article_data.get("suggestion_tweet"), pr_url)
         
-        # Étape de marquage à la fin
-        mark_articles_as_processed(new_articles, processed_urls, GIST_ID, GITHUB_TOKEN)
+        mark_articles_as_processed(new_articles, KVDB_BUCKET_URL)
         
         print("--- Mission d'Aurore terminée avec succès ! ---")
         return { 'statusCode': 200, 'body': json.dumps({ 'message': 'Workflow complet terminé.', 'pull_request_url': pr_url }) }
