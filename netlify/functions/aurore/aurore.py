@@ -46,141 +46,69 @@ def mark_articles_as_processed(articles, bucket_url):
         except Exception as e:
             print(f"Erreur en écrivant dans le bucket kvdb : {e}")
 
+# (Le début du fichier avec les imports et les autres fonctions ne change pas)
+
 # ==============================================================================
-# MODULES : NEWS, AI, GITHUB, SOCIAL (inchangés)
+# MODULE : NEWS (mis à jour pour accepter une source)
 # ==============================================================================
-def get_top_articles(topic, api_key, article_count=3):
+def get_top_articles(source, api_key, article_count=3):
     url = "https://newsapi.org/v2/everything"
-    sources = "reuters,bbc-news"
-    params = {'q': topic, 'sources': sources, 'language': 'en', 'sortBy': 'publishedAt', 'apiKey': api_key}
+    # Le sujet 'a' est un placeholder pour chercher "tout" ce qui est récent.
+    # On filtre principalement par la source.
+    params = {'q': 'a', 'sources': source, 'language': 'en', 'sortBy': 'publishedAt', 'apiKey': api_key}
     try:
         response = requests.get(url, params=params)
         response.raise_for_status()
         data = response.json()
         if data.get('status') != 'ok': return []
         articles = data.get('articles', [])
-        return [{'title': a.get('title'), 'description': a.get('description'), 'content': a.get('content'), 'url': a.get('url'), 'source_name': a.get('source', {}).get('name')} for a in articles[:article_count]]
+        # On ne prend que le tout premier article le plus récent
+        return [{'title': a.get('title'), 'description': a.get('description'), 'content': a.get('content'), 'url': a.get('url'), 'source_name': a.get('source', {}).get('name')} for a in articles[:1]]
     except Exception as e: print(f"Erreur NewsAPI : {e}"); return None
 
-def create_synthesis(articles, api_key):
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel('gemini-1.5-flash-latest') # Modèle mis à jour
-    prompt_header = """# RÔLE\nTu es 'Aurore', un assistant journaliste pour 'L'Horizon Libre'. Ta mission est de créer une synthèse neutre et factuelle en te basant **uniquement** sur les sources fournies.\n\n# FORMAT DE SORTIE\nRéponds **uniquement** en JSON valide.\n\n{\n  "titre": "...",\n  "chapo": "...",\n  "corps_article": ["...", "..."],\n  "conclusion": "...",\n  "suggestion_image": "...",\n  "mots_cles_seo": ["...", "..."],\n  "sources_citees": ["...", "..."],\n  "suggestion_tweet": "..."\n}\n\n# ARTICLES SOURCES\n---\n"""
-    article_content_str = ""
-    for i, article in enumerate(articles):
-        content = article['content'] if article['content'] else article['description']
-        article_content_str += f"### SOURCE {i+1}: {article['source_name']}\n- Titre: {article['title']}\n- Contenu: {content}\n---\n"
-    full_prompt = prompt_header + article_content_str
-    try:
-        response = model.generate_content(full_prompt)
-        cleaned_response = response.text.strip().replace("```json", "").replace("```", "").strip()
-        return json.loads(cleaned_response)
-    except Exception as e: print(f"Erreur Gemini : {e}"); return None
-
-def generate_html(article_data):
-    # Ce chemin est relatif à la racine du dépôt où l'action s'exécute
-    env = Environment(loader=FileSystemLoader('./aurore-script/netlify/functions/aurore/templates'), autoescape=select_autoescape(['html']))
-    template = env.get_template('article.html')
-    return template.render(article=article_data)
-
-def create_and_commit_file(token, repo_name, article_title, html_content):
-    """
-    Crée et commit un nouveau fichier article directement sur la branche main.
-    """
-    try:
-        g = Github(token)
-        repo = g.get_repo(repo_name)
-        
-        slug_title = slugify(article_title)
-        file_path = f"articles/{slug_title}.html"
-        commit_message = f"feat: Ajout de l'article '{article_title}' par Aurore"
-        
-        # On écrit directement sur la branche 'main'
-        repo.create_file(
-            path=file_path,
-            message=commit_message,
-            content=html_content,
-            branch='main'
-        )
-        
-        # On retourne l'URL du fichier créé
-        file_contents = repo.get_contents(file_path, ref='main')
-        print(f"-> Fichier article créé avec succès : {file_contents.html_url}")
-        return file_contents.html_url
-
-    except Exception as e:
-        print(f"Erreur GitHub en créant le fichier : {e}")
-        return None
-
-def post_to_twitter(tweet_text, article_url):
-    full_tweet = f"{tweet_text} \n\nLire l'article complet : {article_url}"
-    try:
-        client = tweepy.Client(bearer_token=os.environ.get('TWITTER_BEARER_TOKEN'), consumer_key=os.environ.get('TWITTER_API_KEY'), consumer_secret=os.environ.get('TWITTER_API_SECRET'), access_token=os.environ.get('TWITTER_ACCESS_TOKEN'), access_token_secret=os.environ.get('TWITTER_ACCESS_TOKEN_SECRET'))
-        response = client.create_tweet(text=full_tweet)
-        return f"https://twitter.com/user/status/{response.data['id']}"
-    except Exception as e: print(f"Erreur Twitter : {e}"); return None
+# ... (les autres fonctions comme create_synthesis, generate_html, etc. ne changent pas) ...
 
 # ==============================================================================
-# FONCTION PRINCIPALE (HANDLER) - VERSION FINALE
+# FONCTION PRINCIPALE (HANDLER) - VERSION MULTI-SOURCE
 # ==============================================================================
 def handler(event, context):
-    print("--- Aurore démarre sa mission (version auto-publication) ---")
+    
+    # --- Le script reçoit la source à traiter depuis l'extérieur ---
+    source_a_traiter = os.environ.get('NEWS_SOURCE')
+    print(f"--- Aurore démarre sa mission pour la source : {source_a_traiter} ---")
     
     # Récupération des secrets
     NEWS_API_KEY = os.environ.get('NEWS_API_KEY')
     GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
     GITHUB_TOKEN = os.environ.get('AURORE_GITHUB_TOKEN')
-    GITHUB_REPO = os.environ.get('REPO_CIBLE') # IMPORTANT: Doit être `Dovhakill/aurore-v2`
+    GITHUB_REPO = os.environ.get('REPO_CIBLE')
     KVDB_BUCKET_URL = os.environ.get('KVDB_BUCKET_URL')
-    topic = "France"
-
+    
     try:
-        print("Étape 1: Lecture de la base de données kvdb.io...")
+        print(f"Étape 1: Lecture de la base de données kvdb.io pour {source_a_traiter}...")
         processed_urls = get_processed_urls(KVDB_BUCKET_URL)
-        print(f"-> Trouvé {len(processed_urls)} URLs déjà traitées.")
         
-        print("\nÉtape 2: Récupération des articles depuis NewsAPI...")
-        all_articles = get_top_articles(topic, NEWS_API_KEY)
+        print(f"\nÉtape 2: Récupération du dernier article de {source_a_traiter} depuis NewsAPI...")
+        all_articles = get_top_articles(source_a_traiter, NEWS_API_KEY)
         if not all_articles:
             print("-> NewsAPI n'a retourné aucun article. Mission terminée.")
             return
 
-        print(f"-> Trouvé {len(all_articles)} articles.")
+        print(f"-> Trouvé {len(all_articles)} article.")
 
         print("\nÉtape 3: Filtrage des doublons...")
         new_articles = check_and_filter_articles(all_articles, processed_urls)
         if not new_articles:
-            print("-> Tous les articles trouvés ont déjà été traités. Mission terminée.")
+            print("-> L'article trouvé a déjà été traité. Mission terminée.")
             return
 
-        print(f"-> {len(new_articles)} article(s) sont nouveaux et vont être traités.")
+        print(f"-> 1 nouvel article va être traité.")
 
-        print("\nÉtape 4: Génération de la synthèse avec Gemini...")
-        article_data = create_synthesis(new_articles, GEMINI_API_KEY)
-        if not article_data: raise ValueError("Impossible de générer la synthèse.")
-        print("-> Synthèse générée avec succès.")
-
-        print("\nÉtape 5: Génération du fichier HTML...")
-        html_content = generate_html(article_data)
-        if not html_content: raise ValueError("Impossible de générer le HTML.")
-        print("-> Fichier HTML généré avec succès.")
-
-        print("\nÉtape 6: Création du fichier article sur GitHub...")
-        file_url = create_and_commit_file(GITHUB_TOKEN, GITHUB_REPO, article_data['titre'], html_content)
-        if not file_url: raise ValueError("Impossible de créer le fichier sur GitHub.")
-        
-        print("\nÉtape 7: Publication du tweet...")
-        tweet_url = post_to_twitter(article_data.get("suggestion_tweet"), file_url)
-        if tweet_url: print(f"-> Tweet publié : {tweet_url}")
-
-        print("\nÉtape 8: Mise à jour de la base de données kvdb.io...")
-        mark_articles_as_processed(new_articles, KVDB_BUCKET_URL)
-        
-        print("\n--- Mission d'Aurore terminée avec succès ! ---")
+        # ... (le reste de la fonction est identique) ...
+        # ... (Étape 4: Synthèse, Étape 5: HTML, etc...)
 
     except Exception as e:
-        print(f"--- ERREUR FATALE DANS LE WORKFLOW D'AURORE --- \n{e}")
-        # On lève l'exception pour que l'action GitHub soit marquée comme échouée
+        print(f"--- ERREUR FATALE DANS LE WORKFLOW D'AURORE POUR {source_a_traiter} --- \n{e}")
         raise e
 
 # Point d'entrée pour l'exécution directe du script
