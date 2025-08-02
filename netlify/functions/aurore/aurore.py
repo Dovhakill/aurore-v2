@@ -79,7 +79,7 @@ def create_synthesis(articles, api_key):
 
 def generate_html(article_data):
     # Ce chemin est relatif à la racine du dépôt où l'action s'exécute
-    env = Environment(loader=FileSystemLoader('./netlify/functions/aurore/templates'), autoescape=select_autoescape(['html']))
+    env = Environment(loader=FileSystemLoader('./aurore-script/netlify/functions/aurore/templates'), autoescape=select_autoescape(['html']))
     template = env.get_template('article.html')
     return template.render(article=article_data)
 
@@ -186,3 +186,4 @@ def handler(event, context):
 # Point d'entrée pour l'exécution directe du script
 if __name__ == "__main__":
     handler(event=None, context=None)
+
