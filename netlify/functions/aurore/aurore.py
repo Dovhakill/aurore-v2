@@ -20,7 +20,7 @@ def get_processed_urls(bucket_url):
         res = requests.get(bucket_url)
         res.raise_for_status()
         return set(res.json())
-    except requests.exceptions.JSONDecodeError: # Le bucket est peut-être vide
+    except ValueError: # Le bucket est peut-être vide ou JSON invalide
         return set()
     except Exception as e:
         print(f"Erreur en lisant le bucket kvdb : {e}")
@@ -43,6 +43,7 @@ def mark_articles_as_processed(articles, bucket_url):
         key = hashlib.sha256(article.get('url').encode()).hexdigest()
         try:
             requests.post(bucket_url + "/" + key)
+            import time; time.sleep(0.1)  # Ajout d'un délai pour éviter de surcharger le service
         except Exception as e:
             print(f"Erreur en écrivant dans le bucket kvdb : {e}")
 
