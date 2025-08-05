@@ -20,11 +20,9 @@ def get_processed_urls(bucket_url):
         res = requests.get(bucket_url)
         res.raise_for_status()
         return set(res.json())
-    except requests.exceptions.JSONDecodeError: # Le bucket est peut-être vide
-        return set()
     except Exception as e:
         print(f"Erreur en lisant le bucket kvdb : {e}")
-        return None
+        return set()
 
 def check_and_filter_articles(articles, processed_urls):
     """Filtre les articles qui n'ont pas encore été traités."""
@@ -62,8 +60,8 @@ def get_top_articles(source, api_key, article_count=3):
         data = response.json()
         if data.get('status') != 'ok': return []
         articles = data.get('articles', [])
-        # On ne prend que le tout premier article le plus récent
-        return [{'title': a.get('title'), 'description': a.get('description'), 'content': a.get('content'), 'url': a.get('url'), 'source_name': a.get('source', {}).get('name')} for a in articles[:1]]
+        # On ne prend que le(s) article(s) le(s) plus récent(s)
+        return [{'title': a.get('title'), 'description': a.get('description'), 'content': a.get('content'), 'url': a.get('url'), 'source_name': a.get('source', {}).get('name')} for a in articles[:article_count]]
     except Exception as e: print(f"Erreur NewsAPI : {e}"); return None
 
 # ... (les autres fonctions comme create_synthesis, generate_html, etc. ne changent pas) ...
