@@ -28,7 +28,8 @@ def get_processed_urls(bucket_url):
 
 def check_and_filter_articles(articles, processed_urls):
     """Filtre les articles qui n'ont pas encore été traités."""
-    if processed_urls is None: return []
+    if processed_urls is None:
+        processed_urls = set()
     
     new_articles = []
     for article in articles:
@@ -63,7 +64,7 @@ def get_top_articles(source, api_key, article_count=3):
         if data.get('status') != 'ok': return []
         articles = data.get('articles', [])
         # On ne prend que le tout premier article le plus récent
-        return [{'title': a.get('title'), 'description': a.get('description'), 'content': a.get('content'), 'url': a.get('url'), 'source_name': a.get('source', {}).get('name')} for a in articles[:1]]
+        return [{'title': a.get('title'), 'description': a.get('description'), 'content': a.get('content'), 'url': a.get('url'), 'source_name': a.get('source', {}).get('name')} for a in articles[:article_count]]
     except Exception as e: print(f"Erreur NewsAPI : {e}"); return None
 
 # ... (les autres fonctions comme create_synthesis, generate_html, etc. ne changent pas) ...
@@ -80,8 +81,8 @@ def handler(event, context):
     # Récupération des secrets
     NEWS_API_KEY = os.environ.get('NEWS_API_KEY')
     GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
-    GITHUB_TOKEN = os.environ.get('AURORE_GITHUB_TOKEN')
-    GITHUB_REPO = os.environ.get('REPO_CIBLE')
+    GITHUB_TOKEN = os.environ.get('GITHUB_TOKEN', os.environ.get('AURORE_GITHUB_TOKEN'))
+    GITHUB_REPO = os.environ.get('GITHUB_REPO_NAME', os.environ.get('REPO_CIBLE'))
     KVDB_BUCKET_URL = os.environ.get('KVDB_BUCKET_URL')
     
     try:
